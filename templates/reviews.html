@@ -1,189 +1,149 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GCash - Review Explorer</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: { colors: { 'brand-blue': '#007DFF', 'slate-bg': '#F8FAFC' } }
+{% extends "base.html" %}
+
+{% block title %}GCash - Review Explorer{% endblock %}
+
+{% block nav_reviews %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Table Styles */
+    .table-row:hover { background-color: #f1f5f9; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-3xl font-bold text-white drop-shadow-md">Review Explorer</h1>
+    <p class="text-blue-100 font-medium">Search and filter through the raw customer feedback database</p>
+</div>
+
+<!-- SEARCH & FILTER BAR -->
+<div class="bg-white/90 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-white/20 mb-6 flex flex-col md:flex-row gap-4">
+    <!-- Search -->
+    <div class="flex-1">
+        <label class="text-xs font-bold text-gray-500 uppercase">Search Keywords</label>
+        <input type="text" id="searchInput" placeholder="e.g., 'OTP', 'Login', 'Slow'" 
+               class="w-full border border-gray-300 rounded-lg p-2 mt-1 text-sm focus:border-brand-blue outline-none bg-white/50">
+    </div>
+    
+    <!-- Rating Filter -->
+    <div class="w-40">
+        <label class="text-xs font-bold text-gray-500 uppercase">Rating</label>
+        <select id="ratingFilter" class="w-full border border-gray-300 rounded-lg p-2 mt-1 text-sm outline-none bg-white/50">
+            <option value="all">All Ratings</option>
+            <option value="1">1 Star Only</option>
+            <option value="2">2 Stars Only</option>
+            <option value="3">3 Stars Only</option>
+            <option value="4">4 Stars Only</option>
+            <option value="5">5 Stars Only</option>
+        </select>
+    </div>
+
+    <!-- Sort Filter -->
+    <div class="w-40">
+        <label class="text-xs font-bold text-gray-500 uppercase">Sort By</label>
+        <select id="sortFilter" class="w-full border border-gray-300 rounded-lg p-2 mt-1 text-sm outline-none bg-white/50">
+            <option value="newest">Newest First</option>
+            <option value="oldest">Oldest First</option>
+            <option value="lowest">Lowest Rating</option>
+            <option value="highest">Highest Rating</option>
+        </select>
+    </div>
+
+    <div class="flex items-end">
+        <button onclick="fetchReviews()" class="bg-brand-blue text-white px-6 py-2 rounded-lg text-sm font-bold hover:bg-blue-600 transition h-[38px] shadow-lg shadow-blue-500/30">
+            Search
+        </button>
+    </div>
+</div>
+
+<!-- RESULTS TABLE -->
+<div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+    <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between">
+        <span class="font-bold text-gray-700">Results</span>
+        <span id="resultCount" class="text-sm text-gray-500">Loading...</span>
+    </div>
+    
+    <div class="overflow-x-auto">
+        <table class="w-full text-left">
+            <thead class="bg-white text-gray-500 text-xs uppercase border-b border-gray-100">
+                <tr>
+                    <th class="px-6 py-3 w-48">User Info</th>
+                    <th class="px-6 py-3">Review Content</th>
+                    <th class="px-6 py-3 w-32 text-center">Rating</th>
+                    <th class="px-6 py-3 w-32 text-center">Likes</th>
+                </tr>
+            </thead>
+            <tbody id="reviewsBody" class="text-sm divide-y divide-gray-100">
+                <!-- JS Injects Here -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Load More -->
+<div class="text-center mt-6">
+    <p class="text-xs text-blue-100/80">Showing top 50 matches</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', fetchReviews);
+
+    async function fetchReviews() {
+        const search = document.getElementById('searchInput').value;
+        const rating = document.getElementById('ratingFilter').value;
+        const sort = document.getElementById('sortFilter').value;
+
+        // Show Loading
+        document.getElementById('reviewsBody').innerHTML = '<tr><td colspan="4" class="p-8 text-center text-gray-400">Searching database...</td></tr>';
+
+        try {
+            const response = await fetch(`/api/reviews?search=${search}&rating=${rating}&sort=${sort}`);
+            const data = await response.json();
+
+            if(data.error) return alert(data.error);
+
+            const tbody = document.getElementById('reviewsBody');
+            tbody.innerHTML = '';
+            document.getElementById('resultCount').innerText = `${data.count} reviews found`;
+
+            if(data.reviews.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-gray-400">No reviews match your filters.</td></tr>';
+                return;
             }
+
+            data.reviews.forEach(r => {
+                const stars = '⭐'.repeat(r.score);
+                tbody.innerHTML += `
+                    <tr class="table-row transition">
+                        <td class="px-6 py-4 align-top">
+                            <div class="font-bold text-gray-800 text-sm">${r.user}</div>
+                            <div class="text-xs text-gray-400 mt-1">${r.date}</div>
+                            <div class="text-xs text-blue-500 mt-1 bg-blue-50 inline-block px-2 py-0.5 rounded">v${r.version}</div>
+                        </td>
+                        <td class="px-6 py-4 align-top">
+                            <p class="text-gray-600 leading-relaxed">${r.content}</p>
+                        </td>
+                        <td class="px-6 py-4 align-top text-center">
+                            <div class="text-yellow-400 text-sm tracking-widest">${stars}</div>
+                        </td>
+                        <td class="px-6 py-4 align-top text-center">
+                            <span class="text-xs font-bold text-gray-500 bg-gray-100 px-2 py-1 rounded">👍 ${r.likes}</span>
+                        </td>
+                    </tr>
+                `;
+            });
+
+        } catch (e) {
+            console.error(e);
         }
-    </script>
-    <style>
-        body { background-color: #F8FAFC; font-family: sans-serif; }
-        .sidebar { background: #0f172a; color: white; }
-        .nav-item:hover, .nav-item.active { background: #007DFF; border-radius: 0.5rem; }
-        
-        /* Table Styles */
-        .table-row:hover { background-color: #f1f5f9; }
-    </style>
-</head>
-<body class="flex h-screen overflow-hidden">
+    }
 
-    <!-- SIDEBAR -->
-    <aside class="sidebar w-64 hidden md:flex flex-col z-20">
-        <div class="p-6 flex items-center space-x-3 border-b border-gray-800">
-            <img src="/static/gcashlogo.png" alt="GCash Logo" class="w-10 h-10"/>
-            <span class="font-bold">GCash Analytics</span>
-        </div>
-        <nav class="flex-1 px-4 py-6 space-y-2">
-            <!-- Links to different routes -->
-            <a href="/" class="nav-item flex items-center px-4 py-3 text-lg font-medium">
-                <img src="{{url_for('static', filename='overview.png')}}" alt="overview icon" class="w-10 h-10 object-contain mr-5"/> Overview
-            </a>
-            <a href="/sentiment" class="nav-item flex items-center px-4 py-3 text-lg font-medium">
-                <img src="{{url_for('static', filename='sentiment.png')}}" alt="sentiment icon" class="w-10 h-10 object-contain mr-5"/> Sentiment Analysis
-            </a>
-            <a href="/versions" class="nav-item flex items-center px-4 py-3 text-lg font-medium">
-                <img src="{{url_for('static', filename='version.png')}}" alt="version icon" class="w-10 h-10 object-contain mr-5"/> Version Analytics
-            </a>
-            <a href="/reviews" class="nav-item active flex items-center px-4 py-3 text-lg font-medium">
-                <img src="{{url_for('static', filename='review.png')}}" alt="review icon" class="w-12 h-12 object-contain mr-4"/> Review Explorer
-            </a>
-        </nav>
-    </aside>
-
-    <!-- MAIN CONTENT -->
-    <main class="flex-1 overflow-y-auto bg-slate-bg relative">
-        <div class="p-8 max-w-7xl mx-auto">
-            
-            <div class="mb-6">
-                <h1 class="text-3xl font-bold text-slate-800">Review Explorer</h1>
-                <p class="text-slate-500">Search and filter through the raw customer feedback database</p>
-            </div>
-
-            <!-- SEARCH & FILTER BAR -->
-            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6 flex flex-col md:flex-row gap-4">
-                <!-- Search -->
-                <div class="flex-1">
-                    <label class="text-xs font-bold text-gray-400 uppercase">Search Keywords</label>
-                    <input type="text" id="searchInput" placeholder="e.g., 'OTP', 'Login', 'Slow'" 
-                           class="w-full border border-gray-300 rounded-lg p-2 mt-1 text-sm focus:border-brand-blue outline-none">
-                </div>
-                
-                <!-- Rating Filter -->
-                <div class="w-40">
-                    <label class="text-xs font-bold text-gray-400 uppercase">Rating</label>
-                    <select id="ratingFilter" class="w-full border border-gray-300 rounded-lg p-2 mt-1 text-sm outline-none">
-                        <option value="all">All Ratings</option>
-                        <option value="1">1 Star Only</option>
-                        <option value="2">2 Stars Only</option>
-                        <option value="3">3 Stars Only</option>
-                        <option value="4">4 Stars Only</option>
-                        <option value="5">5 Stars Only</option>
-                    </select>
-                </div>
-
-                <!-- Sort Filter -->
-                <div class="w-40">
-                    <label class="text-xs font-bold text-gray-400 uppercase">Sort By</label>
-                    <select id="sortFilter" class="w-full border border-gray-300 rounded-lg p-2 mt-1 text-sm outline-none">
-                        <option value="newest">Newest First</option>
-                        <option value="oldest">Oldest First</option>
-                        <option value="lowest">Lowest Rating</option>
-                        <option value="highest">Highest Rating</option>
-                    </select>
-                </div>
-
-                <div class="flex items-end">
-                    <button onclick="fetchReviews()" class="bg-brand-blue text-white px-6 py-2 rounded-lg text-sm font-bold hover:bg-blue-600 transition h-[38px]">
-                        Search
-                    </button>
-                </div>
-            </div>
-
-            <!-- RESULTS TABLE -->
-            <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-                <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between">
-                    <span class="font-bold text-gray-700">Results</span>
-                    <span id="resultCount" class="text-sm text-gray-500">Loading...</span>
-                </div>
-                
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left">
-                        <thead class="bg-white text-gray-500 text-xs uppercase border-b border-gray-100">
-                            <tr>
-                                <th class="px-6 py-3 w-48">User Info</th>
-                                <th class="px-6 py-3">Review Content</th>
-                                <th class="px-6 py-3 w-32 text-center">Rating</th>
-                                <th class="px-6 py-3 w-32 text-center">Likes</th>
-                            </tr>
-                        </thead>
-                        <tbody id="reviewsBody" class="text-sm divide-y divide-gray-100">
-                            <!-- JS Injects Here -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            
-            <!-- Load More -->
-            <div class="text-center mt-6">
-                <p class="text-xs text-gray-400">Showing top 50 matches</p>
-            </div>
-
-        </div>
-    </main>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', fetchReviews);
-
-        async function fetchReviews() {
-            const search = document.getElementById('searchInput').value;
-            const rating = document.getElementById('ratingFilter').value;
-            const sort = document.getElementById('sortFilter').value;
-
-            // Show Loading
-            document.getElementById('reviewsBody').innerHTML = '<tr><td colspan="4" class="p-8 text-center text-gray-400">Searching database...</td></tr>';
-
-            try {
-                const response = await fetch(`/api/reviews?search=${search}&rating=${rating}&sort=${sort}`);
-                const data = await response.json();
-
-                if(data.error) return alert(data.error);
-
-                const tbody = document.getElementById('reviewsBody');
-                tbody.innerHTML = '';
-                document.getElementById('resultCount').innerText = `${data.count} reviews found`;
-
-                if(data.reviews.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-gray-400">No reviews match your filters.</td></tr>';
-                    return;
-                }
-
-                data.reviews.forEach(r => {
-                    const stars = '⭐'.repeat(r.score);
-                    tbody.innerHTML += `
-                        <tr class="table-row transition">
-                            <td class="px-6 py-4 align-top">
-                                <div class="font-bold text-gray-800 text-sm">${r.user}</div>
-                                <div class="text-xs text-gray-400 mt-1">${r.date}</div>
-                                <div class="text-xs text-blue-500 mt-1 bg-blue-50 inline-block px-2 py-0.5 rounded">v${r.version}</div>
-                            </td>
-                            <td class="px-6 py-4 align-top">
-                                <p class="text-gray-600 leading-relaxed">${r.content}</p>
-                            </td>
-                            <td class="px-6 py-4 align-top text-center">
-                                <div class="text-yellow-400 text-sm tracking-widest">${stars}</div>
-                            </td>
-                            <td class="px-6 py-4 align-top text-center">
-                                <span class="text-xs font-bold text-gray-500 bg-gray-100 px-2 py-1 rounded">👍 ${r.likes}</span>
-                            </td>
-                        </tr>
-                    `;
-                });
-
-            } catch (e) {
-                console.error(e);
-            }
-        }
-
-        // Trigger search on "Enter" key
-        document.getElementById('searchInput').addEventListener('keypress', function (e) {
-            if (e.key === 'Enter') fetchReviews();
-        });
-    </script>
-</body>
-</html>
+    // Trigger search on "Enter" key
+    document.getElementById('searchInput').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') fetchReviews();
+    });
+</script>
+{% endblock %}

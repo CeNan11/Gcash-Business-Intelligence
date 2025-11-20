@@ -1,301 +1,217 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GCash - Sentiment Analysis</title>
+{% extends "base.html" %}
+
+{% block title %}GCash - Sentiment Analysis{% endblock %}
+
+{% block nav_sentiment %}active{% endblock %}
+
+{% block extra_head %}
+<!-- JQuery & jQCloud (Required for the Word Cloud) -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqcloud/1.0.4/jqcloud.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jqcloud/1.0.4/jqcloud.min.js"></script>
+<style>
+    /* Word Cloud Customization */
+    div.jqcloud {
+        font-family: 'Inter', sans-serif;
+        color: #334155;
+    }
     
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    /* Vibrant Palette for Word Weights */
+    div.jqcloud span.w10 { color: #2563eb; font-weight: 900; text-shadow: 0 2px 10px rgba(37, 99, 235, 0.2); } /* Blue 600 */
+    div.jqcloud span.w9 { color: #0ea5e9; font-weight: 800; } /* Sky 500 */
+    div.jqcloud span.w8 { color: #0891b2; font-weight: 700; } /* Cyan 600 */
+    div.jqcloud span.w7 { color: #4f46e5; font-weight: 700; } /* Indigo 600 */
+    div.jqcloud span.w6 { color: #7c3aed; font-weight: 600; } /* Violet 600 */
+    div.jqcloud span.w5 { color: #db2777; font-weight: 600; } /* Pink 600 */
+    div.jqcloud span.w4 { color: #475569; font-weight: 500; } /* Slate 600 */
+    div.jqcloud span.w3 { color: #64748b; font-weight: 500; } /* Slate 500 */
+    div.jqcloud span.w2 { color: #94a3b8; font-weight: 400; } /* Slate 400 */
+    div.jqcloud span.w1 { color: #cbd5e1; font-weight: 400; } /* Slate 300 */
+
+    /* Container Styling */
+    #wordcloud-container {
+        background: radial-gradient(circle at center, #ffffff 0%, #f8fafc 100%);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- TOP HEADER & DATE FILTER -->
+<div class="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
+    <div>
+        <h1 class="text-3xl font-bold text-white drop-shadow-md">Sentiment Analysis</h1>
+        <p class="text-blue-100 mt-1 font-medium">Visualizing common topics and emotions</p>
+    </div>
     
-    <!-- JQuery & jQCloud (Required for the Word Cloud) -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqcloud/1.0.4/jqcloud.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jqcloud/1.0.4/jqcloud.min.js"></script>
+    <!-- DATE CONTROLS -->
+    <div class="bg-white/90 backdrop-blur-sm p-3 rounded-xl border border-white/20 shadow-lg flex flex-wrap items-end gap-3">
+        <div>
+            <label class="block text-xs font-bold text-gray-500 mb-1 uppercase">From</label>
+            <input type="date" id="startDate" class="border border-gray-300 rounded p-1 text-sm outline-none focus:border-blue-500 bg-white/50">
+        </div>
+        <div>
+            <label class="block text-xs font-bold text-gray-500 mb-1 uppercase">To</label>
+            <input type="date" id="endDate" class="border border-gray-300 rounded p-1 text-sm outline-none focus:border-blue-500 bg-white/50">
+        </div>
+        <button onclick="fetchSentiment()" class="bg-brand-blue hover:bg-blue-600 text-white px-6 py-1.5 rounded-lg text-sm font-bold transition h-[34px] shadow-lg shadow-blue-500/30">
+            Analyze
+        </button>
+    </div>
+</div>
+
+<!-- WORD CLOUD SECTION -->
+<div class="dashboard-card p-8 mb-8 relative">
+    <div class="flex justify-between items-start mb-4">
+        <div>
+            <h3 class="font-bold text-slate-800 text-xl">☁️ Topic Word Cloud</h3>
+            <p class="text-sm text-gray-500">Most frequent words in user reviews (excluding stopwords)</p>
+        </div>
+    </div>
     
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        'brand-blue': '#007DFF',
-                        'brand-dark': '#0056b3',
-                        'slate-bg': '#F8FAFC',
+    <!-- Container for Word Cloud -->
+    <div id="wordcloud-container" class="w-full h-96 border border-gray-100 rounded-xl flex items-center justify-center bg-slate-50 overflow-hidden shadow-inner relative">
+        <span class="text-gray-400 animate-pulse">Loading text data...</span>
+    </div>
+</div>
+
+<!-- COMPARISON CHARTS -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+    
+    <!-- Positive Keywords -->
+    <div class="dashboard-card p-6 border-t-4 border-green-500">
+        <div class="mb-6">
+            <h3 class="font-bold text-green-700 text-lg flex items-center">
+                👍 What Happy Users Say
+            </h3>
+            <p class="text-xs text-gray-500">Top keywords in 4 & 5 star reviews</p>
+        </div>
+        <div class="h-64">
+            <canvas id="posChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Negative Keywords -->
+    <div class="dashboard-card p-6 border-t-4 border-red-500">
+        <div class="mb-6">
+            <h3 class="font-bold text-red-700 text-lg flex items-center">
+                👎 What Angry Users Say
+            </h3>
+            <p class="text-xs text-gray-500">Top keywords in 1 & 2 star reviews</p>
+        </div>
+        <div class="h-64">
+            <canvas id="negChart"></canvas>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Global Chart Instances
+    let posChart = null;
+    let negChart = null;
+
+    // --- 1. Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+        const today = new Date();
+        // Default to start of year 2023 (or earlier) to ensure data visualization
+        const startDate = new Date('2020-01-01'); 
+        
+        document.getElementById('endDate').valueAsDate = today;
+        document.getElementById('startDate').valueAsDate = startDate;
+
+        fetchSentiment();
+    });
+
+    // --- 2. Fetch Data ---
+    async function fetchSentiment() {
+        const start = document.getElementById('startDate').value;
+        const end = document.getElementById('endDate').value;
+
+        // Show Loading State
+        $('#wordcloud-container').html('<div class="flex flex-col items-center"><div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-2"></div><span class="text-gray-400 text-sm">Mining text patterns...</span></div>');
+
+        try {
+            const response = await fetch(`/api/sentiment?start=${start}&end=${end}`);
+            const data = await response.json();
+
+            if(data.error) {
+                alert(data.error);
+                return;
+            }
+
+            // --- Render Word Cloud ---
+            $('#wordcloud-container').html(''); // Clear loading text
+            $('#wordcloud-container').jQCloud('destroy'); // Clear old cloud
+            
+            if(data.word_cloud && data.word_cloud.length > 0) {
+                // Initialize jQCloud
+                $('#wordcloud-container').jQCloud(data.word_cloud, {
+                    autoResize: true,
+                    fontSize: { from: 0.12, to: 0.02 }, // Bigger fonts
+                    delay: 50
+                });
+            } else {
+                $('#wordcloud-container').html('<p class="text-gray-400">No enough data for word cloud.</p>');
+            }
+
+            // --- Render Charts ---
+            renderBarChart('posChart', 'Positive Keywords', data.positive_words, '#22c55e'); // Green
+            renderBarChart('negChart', 'Negative Keywords', data.negative_words, '#ef4444'); // Red
+
+        } catch (e) {
+            console.error("Error:", e);
+            $('#wordcloud-container').html('<p class="text-red-400">Failed to load data.</p>');
+        }
+    }
+
+    // --- 3. Chart Helper ---
+    function renderBarChart(canvasId, label, dataObj, color) {
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        
+        // Destroy previous instance if exists
+        if(canvasId === 'posChart' && posChart) posChart.destroy();
+        if(canvasId === 'negChart' && negChart) negChart.destroy();
+
+        const chart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: dataObj.labels,
+                datasets: [{
+                    label: 'Frequency',
+                    data: dataObj.data,
+                    backgroundColor: color,
+                    borderRadius: 6,
+                    barPercentage: 0.6
+                }]
+            },
+            options: {
+                indexAxis: 'y', // Horizontal Bar Chart
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#1e293b',
+                        padding: 12,
+                        cornerRadius: 8,
+                        titleFont: { size: 14 },
+                        bodyFont: { size: 13 }
+                    }
+                },
+                scales: {
+                    x: { grid: { display: false } },
+                    y: { 
+                        grid: { display: false },
+                        ticks: { font: { size: 12, weight: '500' } }
                     }
                 }
             }
-        }
-    </script>
-    <style>
-        body { background-color: #F8FAFC; font-family: 'Inter', sans-serif; }
-        
-        /* Card Styles */
-        .dashboard-card {
-            background: white;
-            border: 1px solid #E2E8F0;
-            border-radius: 1rem;
-            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
-            transition: all 0.3s ease;
-        }
-        .dashboard-card:hover {
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-            transform: translateY(-2px);
-        }
-
-        /* Sidebar Styles */
-        .sidebar { background: #0f172a; color: white; }
-        .nav-item { transition: all 0.2s; opacity: 0.7; }
-        .nav-item:hover, .nav-item.active {
-            opacity: 1;
-            background: #007DFF;
-            border-radius: 0.5rem;
-            box-shadow: 0 0 15px rgba(0, 125, 255, 0.4);
-            transform: scale(1.05);
-        }
-
-        /* Word Cloud Customization */
-        div.jqcloud {
-            font-family: 'Inter', sans-serif;
-            color: #334155;
-        }
-        
-        /* Vibrant Palette for Word Weights */
-        div.jqcloud span.w10 { color: #2563eb; font-weight: 900; text-shadow: 0 2px 10px rgba(37, 99, 235, 0.2); } /* Blue 600 */
-        div.jqcloud span.w9 { color: #0ea5e9; font-weight: 800; } /* Sky 500 */
-        div.jqcloud span.w8 { color: #0891b2; font-weight: 700; } /* Cyan 600 */
-        div.jqcloud span.w7 { color: #4f46e5; font-weight: 700; } /* Indigo 600 */
-        div.jqcloud span.w6 { color: #7c3aed; font-weight: 600; } /* Violet 600 */
-        div.jqcloud span.w5 { color: #db2777; font-weight: 600; } /* Pink 600 */
-        div.jqcloud span.w4 { color: #475569; font-weight: 500; } /* Slate 600 */
-        div.jqcloud span.w3 { color: #64748b; font-weight: 500; } /* Slate 500 */
-        div.jqcloud span.w2 { color: #94a3b8; font-weight: 400; } /* Slate 400 */
-        div.jqcloud span.w1 { color: #cbd5e1; font-weight: 400; } /* Slate 300 */
-
-        /* Container Styling */
-        #wordcloud-container {
-            background: radial-gradient(circle at center, #ffffff 0%, #f8fafc 100%);
-        }
-    </style>
-</head>
-<body class="flex h-screen overflow-hidden">
-
-    <!-- SIDEBAR -->
-    <aside class="sidebar w-64 hidden md:flex flex-col z-20 shadow-xl">
-        <div class="p-6 flex items-center space-x-3 border-b border-gray-800">
-            <img src="{{ url_for('static', filename='gcashlogo.png') }}" alt="GCash Logo" class="w-10 h-10"/>
-            <div>
-                <h2 class="font-bold text-lg tracking-wide">Analytics</h2>
-                <p class="text-xs text-gray-400">GCash Reviews</p>
-            </div>
-        </div>
-
-        <nav class="flex-1 px-4 py-6 space-y-2">
-            <!-- Link to Overview -->
-            <a href="/" class="nav-item flex items-center px-4 py-3 text-lg font-medium">
-                <img src="{{url_for('static', filename='overview.png')}}" alt="overview icon" class="w-10 h-10 object-contain mr-5"/> Overview
-            </a>
-            <a href="/sentiment" class="nav-item active flex items-center px-4 py-3 text-lg font-medium">
-                <img src="{{url_for('static', filename='sentiment.png')}}" alt="sentiment icon" class="w-10 h-10 object-contain mr-5"/> Sentiment Analysis
-            </a>
-            <a href="/versions" class="nav-item flex items-center px-4 py-3 text-lg font-medium">
-                <img src="{{url_for('static', filename='version.png')}}" alt="version icon" class="w-10 h-10 object-contain mr-5"/> Version Analytics
-            </a>
-            <a href="/reviews" class="nav-item flex items-center px-4 py-3 text-lg font-medium">
-                <img src="{{url_for('static', filename='review.png')}}" alt="review icon" class="w-12 h-12 object-contain mr-4"/> Review Explorer
-            </a>
-        </nav>
-    </aside>
-
-    <!-- MAIN CONTENT -->
-    <main class="flex-1 overflow-y-auto bg-slate-bg relative">
-        <div class="p-8 max-w-7xl mx-auto">
-            
-            <!-- TOP HEADER & DATE FILTER -->
-            <div class="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
-                <div>
-                    <h1 class="text-3xl font-bold text-slate-800">Sentiment Analysis</h1>
-                    <p class="text-slate-500 mt-1">Visualizing common topics and emotions</p>
-                </div>
-                
-                <!-- DATE CONTROLS -->
-                <div class="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex flex-wrap items-end gap-3">
-                    <div>
-                        <label class="block text-xs font-bold text-gray-400 mb-1 uppercase">From</label>
-                        <input type="date" id="startDate" class="border border-gray-300 rounded p-1 text-sm outline-none focus:border-blue-500">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-gray-400 mb-1 uppercase">To</label>
-                        <input type="date" id="endDate" class="border border-gray-300 rounded p-1 text-sm outline-none focus:border-blue-500">
-                    </div>
-                    <button onclick="fetchSentiment()" class="bg-brand-blue hover:bg-blue-600 text-white px-6 py-1.5 rounded-lg text-sm font-bold transition h-[34px] shadow-lg shadow-blue-500/30">
-                        Analyze
-                    </button>
-                </div>
-            </div>
-
-            <!-- WORD CLOUD SECTION -->
-            <div class="dashboard-card p-8 mb-8 relative">
-                <div class="flex justify-between items-start mb-4">
-                    <div>
-                        <h3 class="font-bold text-slate-800 text-xl">☁️ Topic Word Cloud</h3>
-                        <p class="text-sm text-gray-500">Most frequent words in user reviews (excluding stopwords)</p>
-                    </div>
-                </div>
-                
-                <!-- Container for Word Cloud -->
-                <div id="wordcloud-container" class="w-full h-96 border border-gray-100 rounded-xl flex items-center justify-center bg-slate-50 overflow-hidden shadow-inner relative">
-                    <span class="text-gray-400 animate-pulse">Loading text data...</span>
-                </div>
-            </div>
-
-            <!-- COMPARISON CHARTS -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                
-                <!-- Positive Keywords -->
-                <div class="dashboard-card p-6 border-t-4 border-green-500">
-                    <div class="mb-6">
-                        <h3 class="font-bold text-green-700 text-lg flex items-center">
-                            👍 What Happy Users Say
-                        </h3>
-                        <p class="text-xs text-gray-500">Top keywords in 4 & 5 star reviews</p>
-                    </div>
-                    <div class="h-64">
-                        <canvas id="posChart"></canvas>
-                    </div>
-                </div>
-
-                <!-- Negative Keywords -->
-                <div class="dashboard-card p-6 border-t-4 border-red-500">
-                    <div class="mb-6">
-                        <h3 class="font-bold text-red-700 text-lg flex items-center">
-                            👎 What Angry Users Say
-                        </h3>
-                        <p class="text-xs text-gray-500">Top keywords in 1 & 2 star reviews</p>
-                    </div>
-                    <div class="h-64">
-                        <canvas id="negChart"></canvas>
-                    </div>
-                </div>
-
-            </div>
-            
-             <!-- Footer -->
-             <div class="mt-12 text-center text-gray-400 text-sm pb-8">
-                <p>&copy; 2024 GCash Analytics Dashboard.</p>
-            </div>
-
-        </div>
-    </main>
-
-    <script>
-        // Global Chart Instances
-        let posChart = null;
-        let negChart = null;
-
-        // --- 1. Initialization ---
-        document.addEventListener('DOMContentLoaded', () => {
-            const today = new Date();
-            // Default to start of year 2023 (or earlier) to ensure data visualization
-            const startDate = new Date('2020-01-01'); 
-            
-            document.getElementById('endDate').valueAsDate = today;
-            document.getElementById('startDate').valueAsDate = startDate;
-
-            fetchSentiment();
         });
 
-        // --- 2. Fetch Data ---
-        async function fetchSentiment() {
-            const start = document.getElementById('startDate').value;
-            const end = document.getElementById('endDate').value;
-
-            // Show Loading State
-            $('#wordcloud-container').html('<div class="flex flex-col items-center"><div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-2"></div><span class="text-gray-400 text-sm">Mining text patterns...</span></div>');
-
-            try {
-                const response = await fetch(`/api/sentiment?start=${start}&end=${end}`);
-                const data = await response.json();
-
-                if(data.error) {
-                    alert(data.error);
-                    return;
-                }
-
-                // --- Render Word Cloud ---
-                $('#wordcloud-container').html(''); // Clear loading text
-                $('#wordcloud-container').jQCloud('destroy'); // Clear old cloud
-                
-                if(data.word_cloud && data.word_cloud.length > 0) {
-                    // Initialize jQCloud
-                    $('#wordcloud-container').jQCloud(data.word_cloud, {
-                        autoResize: true,
-                        fontSize: { from: 0.12, to: 0.02 }, // Bigger fonts
-                        delay: 50
-                    });
-                } else {
-                    $('#wordcloud-container').html('<p class="text-gray-400">No enough data for word cloud.</p>');
-                }
-
-                // --- Render Charts ---
-                renderBarChart('posChart', 'Positive Keywords', data.positive_words, '#22c55e'); // Green
-                renderBarChart('negChart', 'Negative Keywords', data.negative_words, '#ef4444'); // Red
-
-            } catch (e) {
-                console.error("Error:", e);
-                $('#wordcloud-container').html('<p class="text-red-400">Failed to load data.</p>');
-            }
-        }
-
-        // --- 3. Chart Helper ---
-        function renderBarChart(canvasId, label, dataObj, color) {
-            const ctx = document.getElementById(canvasId).getContext('2d');
-            
-            // Destroy previous instance if exists
-            if(canvasId === 'posChart' && posChart) posChart.destroy();
-            if(canvasId === 'negChart' && negChart) negChart.destroy();
-
-            const chart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: dataObj.labels,
-                    datasets: [{
-                        label: 'Frequency',
-                        data: dataObj.data,
-                        backgroundColor: color,
-                        borderRadius: 6,
-                        barPercentage: 0.6
-                    }]
-                },
-                options: {
-                    indexAxis: 'y', // Horizontal Bar Chart
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            backgroundColor: '#1e293b',
-                            padding: 12,
-                            cornerRadius: 8,
-                            titleFont: { size: 14 },
-                            bodyFont: { size: 13 }
-                        }
-                    },
-                    scales: {
-                        x: { grid: { display: false } },
-                        y: { 
-                            grid: { display: false },
-                            ticks: { font: { size: 12, weight: '500' } }
-                        }
-                    }
-                }
-            });
-
-            // Save instance reference
-            if(canvasId === 'posChart') posChart = chart;
-            if(canvasId === 'negChart') negChart = chart;
-        }
-    </script>
-</body>
-</html>
+        // Save instance reference
+        if(canvasId === 'posChart') posChart = chart;
+        if(canvasId === 'negChart') negChart = chart;
+    }
+</script>
+{% endblock %}
