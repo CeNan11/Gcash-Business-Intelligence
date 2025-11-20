@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}GCash Intelligence Dashboard{% endblock %}</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js for Interactive Graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- JQuery (Commonly used) -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    
+    {% block extra_head %}{% endblock %}
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'brand-blue': '#007DFF',
+                        'brand-dark': '#0056b3',
+                        'brand-gcash': '#0055aa', /* GCash Blue approx */
+                        'slate-bg': '#F8FAFC',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Base Styles */
+        body { 
+            /* GCash-like Blue Gradient Background */
+            background: linear-gradient(135deg, #007DFF 0%, #0055aa 100%);
+            color: #334155; 
+            font-family: 'Inter', sans-serif; 
+            min-height: 100vh;
+        }
+        
+        /* Card Styles */
+        .dashboard-card {
+            background: rgba(255, 255, 255, 0.95); /* Slightly transparent white */
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+        .dashboard-card:hover {
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            transform: translateY(-2px);
+        }
+
+        /* Sidebar */
+        .sidebar { 
+            background: rgba(255, 255, 255, 0.1); 
+            backdrop-filter: blur(10px);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            color: white; 
+        }
+        
+        /* Navigation Item Base Style */
+        .nav-item {
+            transition: all 0.2s ease-in-out;
+            opacity: 0.8;
+            transform-origin: center;
+            color: white;
+            border-radius: 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Active State */
+        .nav-item.active {
+            opacity: 1;
+            background: white;
+            color: #007DFF; /* Blue text on white active bg */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            font-weight: bold;
+        }
+
+        /* HOVER State */
+        .nav-item:hover:not(.active) {
+            opacity: 1;
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateX(5px);
+        }
+        
+        /* Scrollbar Customization */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3); 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5); 
+        }
+
+        /* Headings in main content should be white if on blue bg, but we are putting them in cards usually. 
+           If they are outside cards, we need to handle them. */
+        h1, h2.page-title {
+            color: white;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        p.page-subtitle {
+            color: rgba(255, 255, 255, 0.8);
+        }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar w-72 hidden md:flex flex-col z-20 shadow-2xl">
+        <div class="p-6 flex items-center space-x-4 border-b border-white/10">
+            <!-- Using url_for for the logo is safer -->
+            <div class="bg-white p-2 rounded-xl shadow-lg">
+                <img src="{{ url_for('static', filename='gcashlogo.png') }}" alt="GCash Logo" class="w-10 h-10 object-contain"/>
+            </div>
+            <div>
+                <h2 class="font-bold text-xl tracking-wide text-white">Analytics</h2>
+                <p class="text-xs text-blue-100">GCash Reviews</p>
+            </div>
+        </div>
+
+        <nav class="flex-1 px-4 py-6">
+            <!-- Links to different routes -->
+            <a href="/" class="nav-item {% block nav_overview %}{% endblock %} flex items-center px-4 py-3 text-lg font-medium">
+                <img src="{{url_for('static', filename='overview.png')}}" alt="overview icon" class="w-8 h-8 object-contain mr-4"/> Overview
+            </a>
+            <a href="/sentiment" class="nav-item {% block nav_sentiment %}{% endblock %} flex items-center px-4 py-3 text-lg font-medium">
+                <img src="{{url_for('static', filename='sentiment.png')}}" alt="sentiment icon" class="w-8 h-8 object-contain mr-4"/> Sentiment
+            </a>
+            <a href="/versions" class="nav-item {% block nav_versions %}{% endblock %} flex items-center px-4 py-3 text-lg font-medium">
+                <img src="{{url_for('static', filename='version.png')}}" alt="version icon" class="w-8 h-8 object-contain mr-4"/> Versions
+            </a>
+            <a href="/reviews" class="nav-item {% block nav_reviews %}{% endblock %} flex items-center px-4 py-3 text-lg font-medium">
+                <img src="{{url_for('static', filename='review.png')}}" alt="review icon" class="w-8 h-8 object-contain mr-4"/> Reviews
+            </a>
+        </nav>
+
+        <div class="p-4 border-t border-white/10">
+            <div class="flex items-center space-x-3 bg-white/10 p-3 rounded-xl">
+                <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse shadow-[0_0_10px_#4ade80]"></div>
+                <p class="text-xs text-white font-medium">System Online</p>
+            </div>
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 overflow-y-auto relative scroll-smooth">
+        
+        <div class="p-8 max-w-7xl mx-auto">
+            {% block content %}{% endblock %}
+            
+            <!-- Footer -->
+            <div class="mt-12 text-center text-blue-100/60 text-sm pb-8">
+                <p>&copy; 2024 GCash Analytics Dashboard.</p>
+            </div>
+        </div>
+    </main>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>
