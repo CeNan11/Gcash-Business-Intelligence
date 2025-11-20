@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GCash Intelligence Dashboard</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js for Interactive Graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'brand-blue': '#007DFF',
+                        'brand-dark': '#0056b3',
+                        'slate-bg': '#F8FAFC',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Base Styles */
+        body { background-color: #F8FAFC; color: #334155; font-family: sans-serif; }
+        
+        /* Card Styles */
+        .dashboard-card {
+            background: white;
+            border: 1px solid #E2E8F0;
+            border-radius: 1rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+        }
+        .dashboard-card:hover {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            transform: translateY(-2px);
+        }
+
+        /* Sidebar */
+        .sidebar { background: #0f172a; color: white; }
+        
+        /* Navigation Item Base Style */
+        .nav-item {
+            transition: all 0.2s ease-in-out;
+            opacity: 0.7;
+            transform-origin: center;
+        }
+
+        /* Active State */
+        .nav-item.active {
+            opacity: 1;
+            background: #007DFF;
+            border-radius: 0.5rem;
+            box-shadow: 0 0 15px rgba(0, 125, 255, 0.4);
+        }
+
+        /* HOVER State - Highlight AND Zoom */
+        .nav-item:hover {
+            opacity: 1;
+            background: #007DFF;
+            border-radius: 0.5rem;
+            box-shadow: 0 0 15px rgba(0, 125, 255, 0.4);
+            transform: scale(1.05);
+        }
+
+        /* Date Inputs */
+        input[type="date"] {
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            padding: 0.4rem;
+            font-size: 0.875rem;
+            outline: none;
+            color: #475569;
+        }
+        input[type="date"]:focus { border-color: #007DFF; ring: 2px; }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar w-64 hidden md:flex flex-col z-20 shadow-xl">
+        <div class="p-6 flex items-center space-x-3 border-b border-gray-800">
+            <!-- Using url_for for the logo is safer -->
+            <img src="{{ url_for('static', filename='gcashlogo.png') }}" alt="GCash Logo" class="w-10 h-10"/>
+            <div>
+                <h2 class="font-bold text-lg tracking-wide">Analytics</h2>
+                <p class="text-xs text-gray-400">GCash Reviews</p>
+            </div>
+        </div>
+
+        <nav class="flex-1 px-4 py-6 space-y-2">
+            <!-- Links to different routes -->
+            <a href="/" class="nav-item active flex items-center px-4 py-3 text-lg font-medium">
+                <img src="{{url_for('static', filename='overview.png')}}" alt="overview icon" class="w-10 h-10 object-contain mr-5"/> Overview
+            </a>
+            <a href="/sentiment" class="nav-item flex items-center px-4 py-3 text-lg font-medium">
+                <img src="{{url_for('static', filename='sentiment.png')}}" alt="sentiment icon" class="w-10 h-10 object-contain mr-5"/> Sentiment Analysis
+            </a>
+            <a href="/versions" class="nav-item flex items-center px-4 py-3 text-lg font-medium">
+                <img src="{{url_for('static', filename='version.png')}}" alt="version icon" class="w-10 h-10 object-contain mr-5"/> Version Analytics
+            </a>
+            <a href="/reviews" class="nav-item flex items-center px-4 py-3 text-lg font-medium">
+                <img src="{{url_for('static', filename='review.png')}}" alt="review icon" class="w-12 h-12 object-contain mr-4"/> Review Explorer
+            </a>
+        </nav>
+
+        <div class="p-4 border-t border-gray-800">
+            <div class="flex items-center space-x-3">
+                <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                <p class="text-xs text-gray-400">System Online</p>
+            </div>
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 overflow-y-auto bg-slate-bg relative scroll-smooth">
+        
+        <div class="p-8 max-w-7xl mx-auto">
+            <!-- TOP HEADER & DATE FILTERS -->
+            <div class="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
+                <div>
+                    <h1 class="text-3xl font-bold text-slate-800">Dashboard Overview</h1>
+                    <p class="text-slate-500 mt-1">Real-time insights and performance metrics</p>
+                </div>
+                
+                <!-- DATE CONTROLS -->
+                <div class="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex flex-wrap items-end gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 mb-1 uppercase">From</label>
+                        <input type="date" id="startDate">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 mb-1 uppercase">To</label>
+                        <input type="date" id="endDate">
+                    </div>
+                    <button onclick="applyFilters()" class="bg-brand-blue hover:bg-blue-600 text-white px-6 py-1.5 rounded-lg text-sm font-bold transition h-[34px] shadow-lg shadow-blue-500/30">
+                        Apply Filter
+                    </button>
+                </div>
+            </div>
+
+            <!-- KPI CARDS -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <!-- Total Reviews -->
+                <div class="dashboard-card p-6 relative overflow-hidden group">
+                    <div class="absolute right-0 top-0 w-24 h-24 bg-blue-50 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+                    <div class="relative z-10">
+                        <p class="text-sm font-bold text-slate-400 uppercase tracking-wider">Total Reviews</p>
+                        <h3 class="text-4xl font-black text-slate-800 mt-2" id="totalReviews">-</h3>
+                        <p class="text-sm text-blue-600 mt-2 font-medium">In selected period</p>
+                    </div>
+                </div>
+
+                <!-- Average Rating -->
+                <div class="dashboard-card p-6 relative overflow-hidden group">
+                    <div class="absolute right-0 top-0 w-24 h-24 bg-yellow-50 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+                    <div class="relative z-10">
+                        <p class="text-sm font-bold text-slate-400 uppercase tracking-wider">Average Rating</p>
+                        <div class="flex items-center mt-2">
+                            <h3 class="text-4xl font-black text-slate-800" id="avgRating">-</h3>
+                            <span class="text-yellow-400 text-2xl ml-2">★</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Net Sentiment -->
+                <div class="dashboard-card p-6 relative overflow-hidden group">
+                    <div class="absolute right-0 top-0 w-24 h-24 bg-green-50 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+                    <div class="relative z-10">
+                        <p class="text-sm font-bold text-slate-400 uppercase tracking-wider">Net Sentiment</p>
+                        <h3 class="text-4xl font-black mt-2" id="netSentiment">-</h3>
+                        <p class="text-xs text-slate-400 mt-2">(Positive % - Negative %)</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- NEW: PREDICTION BANNER (Added for Rubric) -->
+            <div id="predictionCard" class="hidden dashboard-card p-6 mb-8 border-l-4 border-brand-blue bg-gradient-to-r from-white to-blue-50">
+                <div class="flex flex-col md:flex-row justify-between items-center">
+                    <div class="flex items-start space-x-4">
+                        <div class="bg-blue-100 p-3 rounded-full">
+                            <span class="text-2xl">🤖</span>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-800">AI Performance Forecast</h3>
+                            <p class="text-sm text-slate-500 max-w-xl">
+                                Based on linear regression analysis of recent trends, we project the following rating performance for next month.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="text-right mt-4 md:mt-0 bg-white px-6 py-2 rounded-xl shadow-sm border border-blue-100">
+                        <p class="text-xs text-slate-400 uppercase font-bold tracking-wider">Projected Rating</p>
+                        <div class="flex items-center justify-end space-x-2">
+                            <h3 class="text-3xl font-black text-slate-800" id="predValue">-</h3>
+                            <span class="text-yellow-400 text-xl">★</span>
+                        </div>
+                        <p class="text-sm font-bold" id="predTrend">-</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CHARTS GRID -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+                <!-- Trend Chart -->
+                <div class="dashboard-card p-6 lg:col-span-2">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="font-bold text-slate-800 text-lg">Rating Trends</h3>
+                    </div>
+                    <div class="h-72 w-full">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Distribution Chart -->
+                <div class="dashboard-card p-6">
+                    <h3 class="font-bold text-slate-800 text-lg mb-6">Star Distribution</h3>
+                    <div class="h-72 w-full">
+                        <canvas id="distChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- URGENT ISSUES TABLE -->
+            <div class="dashboard-card overflow-hidden">
+                <div class="p-6 border-b border-gray-100 bg-red-50 flex flex-col md:flex-row justify-between items-center">
+                    <div class="mb-4 md:mb-0">
+                        <h3 class="font-bold text-red-900 text-lg flex items-center">
+                            🔥 Urgent Community Issues
+                        </h3>
+                        <p class="text-sm text-red-700 opacity-80">Negative reviews with highest user agreement</p>
+                    </div>
+                    
+                    <!-- YEAR FILTER -->
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xs font-bold text-red-800 uppercase">Target Year:</span>
+                        <select id="urgentYearSelect" onchange="applyFilters()" class="bg-white border border-red-200 text-red-900 text-sm rounded-lg focus:ring-red-500 focus:border-red-500 block p-2 cursor-pointer">
+                            <option value="All">All Time</option>
+                            <!-- Years populated via JS -->
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
+                            <tr>
+                                <th class="px-6 py-3">User / Version</th>
+                                <th class="px-6 py-3">Issue Description</th>
+                                <th class="px-6 py-3 text-center">Likes</th>
+                                <th class="px-6 py-3 text-center">Rating</th>
+                            </tr>
+                        </thead>
+                        <tbody id="urgentTableBody" class="divide-y divide-gray-100 text-sm">
+                            <!-- Rows injected via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="mt-12 text-center text-gray-400 text-sm pb-8">
+                <p>&copy; 2024 GCash Analytics Dashboard.</p>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Global Variables for Charts
+        let trendChart = null;
+        let distChart = null;
+
+        // --- 1. Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            const today = new Date();
+            // Default start date: Jan 1, 2020 (Ensures data is visible immediately)
+            const startDate = new Date('2020-01-01'); 
+            
+            document.getElementById('endDate').valueAsDate = today;
+            document.getElementById('startDate').valueAsDate = startDate;
+
+            // Load Data
+            applyFilters();
+        });
+
+        // --- 2. Fetch Data ---
+        async function applyFilters() {
+            const start = document.getElementById('startDate').value;
+            const end = document.getElementById('endDate').value;
+            const year = document.getElementById('urgentYearSelect').value;
+
+            const url = `/api/overview?start=${start}&end=${end}&urgent_year=${year}`;
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if(data.error) {
+                    console.error(data.error);
+                    return;
+                }
+
+                // Populate Year Dropdown (Only if not already populated)
+                const yearSelect = document.getElementById('urgentYearSelect');
+                if (yearSelect.options.length <= 1 && data.available_years && data.available_years.length > 0) {
+                    data.available_years.forEach(y => {
+                        const option = document.createElement('option');
+                        option.value = y;
+                        option.text = y;
+                        yearSelect.appendChild(option);
+                    });
+                }
+
+                // Update UI
+                updateDashboard(data);
+
+            } catch (e) {
+                console.error("Connection Error:", e);
+                alert("Could not connect to the server. Is app.py running?");
+            }
+        }
+
+        // --- 3. Update Dashboard Elements ---
+        function updateDashboard(data) {
+            // KPIs
+            document.getElementById('totalReviews').innerText = data.total_reviews.toLocaleString();
+            document.getElementById('avgRating').innerText = data.avg_rating;
+            
+            const netEl = document.getElementById('netSentiment');
+            netEl.innerText = data.net_sentiment + '%';
+            netEl.className = `text-4xl font-black mt-2 ${data.net_sentiment > 0 ? 'text-green-500' : 'text-red-500'}`;
+
+            // --- NEW: PREDICTION LOGIC ---
+            const predCard = document.getElementById('predictionCard');
+            if (data.prediction) {
+                // Show Card
+                predCard.classList.remove('hidden');
+                
+                // Set Value
+                document.getElementById('predValue').innerText = data.prediction.predicted_rating;
+                
+                // Set Trend Text/Color
+                const trendEl = document.getElementById('predTrend');
+                if (data.prediction.trend_direction === 'UP') {
+                    trendEl.innerHTML = "📈 Trending UP vs Last Month";
+                    trendEl.className = "text-sm font-bold text-green-600 mt-1";
+                } else {
+                    trendEl.innerHTML = "📉 Trending DOWN vs Last Month";
+                    trendEl.className = "text-sm font-bold text-red-600 mt-1";
+                }
+            } else {
+                // Hide if no data
+                predCard.classList.add('hidden');
+            }
+
+            // Charts
+            renderTrendChart(data.monthly_trends, data.prediction);
+            renderDistChart(data.rating_distribution);
+
+            // Urgent Table
+            const tbody = document.getElementById('urgentTableBody');
+            tbody.innerHTML = '';
+
+            if (!data.urgent_reviews || data.urgent_reviews.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="p-6 text-center text-gray-400">No urgent issues found for this selection.</td></tr>';
+            } else {
+                data.urgent_reviews.forEach(r => {
+                    tbody.innerHTML += `
+                        <tr class="hover:bg-red-50 transition group">
+                            <td class="px-6 py-4">
+                                <div class="font-bold text-gray-700">${r.user}</div>
+                                <div class="text-xs text-gray-400">v${r.version}</div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="text-gray-600 line-clamp-2 group-hover:text-gray-900 max-w-md">${r.content}</div>
+                                <div class="text-xs text-gray-400 mt-1">${r.date}</div>
+                            </td>
+                            <td class="px-6 py-4 text-center">
+                                <span class="bg-red-100 text-red-800 text-xs font-bold px-2 py-1 rounded-full">
+                                    👍 ${r.likes}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-center">
+                                <div class="text-yellow-500 text-sm">${'⭐'.repeat(r.score)}</div>
+                            </td>
+                        </tr>
+                    `;
+                });
+            }
+        }
+
+        // --- 4. Chart Rendering ---
+        function renderTrendChart(trends, prediction) {
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            if (trendChart) trendChart.destroy();
+
+            if (!trends || trends.labels.length === 0) return;
+
+            // Prepare Data
+            let labels = [...trends.labels]; // Copy existing labels
+            let actualData = [...trends.ratings];
+            let trendData = [];
+
+            // If we have a prediction, add the "Future" point
+            if (prediction && prediction.trend_line) {
+                // Add "Forecast" to labels
+                labels.push('Next Month');
+                
+                // Trend data covers history + future
+                trendData = prediction.trend_line;
+            }
+
+            trendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        // 1. The Actual Data (Blue, Filled)
+                        {
+                            label: 'Actual Rating',
+                            data: actualData,
+                            borderColor: '#007DFF',
+                            backgroundColor: 'rgba(0, 125, 255, 0.1)',
+                            borderWidth: 3,
+                            pointRadius: 4,
+                            fill: true,
+                            tension: 0.4,
+                            order: 2 // Draw this behind the trend line
+                        },
+                        // 2. The Forecast Line (Orange, Dotted)
+                        {
+                            label: 'AI Trend / Forecast',
+                            data: trendData,
+                            borderColor: '#f59e0b', // Orange
+                            borderWidth: 2,
+                            borderDash: [5, 5], // Dotted Line style
+                            pointRadius: 0, // No points on the line
+                            pointHoverRadius: 0,
+                            fill: false,
+                            tension: 0, // Straight line (Linear Regression)
+                            order: 1 // Draw on top
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: { 
+                        legend: { 
+                            display: true,
+                            position: 'top',
+                            align: 'end'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.raw + ' ⭐';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { min: 1, max: 5 },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        // --- 5. Distribution Chart (WAS MISSING IN YOUR SNIPPET) ---
+        function renderDistChart(dist) {
+            const ctx = document.getElementById('distChart').getContext('2d');
+            if (distChart) distChart.destroy();
+
+            distChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['1 ⭐', '2 ⭐', '3 ⭐', '4 ⭐', '5 ⭐'],
+                    datasets: [{
+                        label: 'Reviews',
+                        data: [dist['1'], dist['2'], dist['3'], dist['4'], dist['5']],
+                        backgroundColor: ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e'],
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: { legend: { display: false } },
+                    scales: { x: { grid: { display: false } } }
+                }
+            });
+        }
+    </script>
+</body>
+</html>

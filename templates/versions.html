@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GCash - Version Analytics</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'brand-blue': '#007DFF',
+                        'brand-dark': '#0056b3',
+                        'slate-bg': '#F8FAFC',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #F8FAFC; font-family: sans-serif; }
+        
+        .dashboard-card {
+            background: white;
+            border: 1px solid #E2E8F0;
+            border-radius: 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        /* Sidebar */
+        .sidebar { background: #0f172a; color: white; }
+        .nav-item { transition: all 0.2s; opacity: 0.7; }
+        .nav-item:hover, .nav-item.active {
+            opacity: 1;
+            background: #007DFF;
+            border-radius: 0.5rem;
+            box-shadow: 0 0 15px rgba(0, 125, 255, 0.4);
+        }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar w-64 hidden md:flex flex-col z-20 shadow-xl">
+        <div class="p-6 flex items-center space-x-3 border-b border-gray-800">
+            <img src="/static/gcashlogo.png" alt="GCash Logo" class="w-10 h-10"/>
+            <div>
+                <h2 class="font-bold text-lg tracking-wide">Analytics</h2>
+                <p class="text-xs text-gray-400">GCash Reviews</p>
+            </div>
+        </div>
+
+        <nav class="flex-1 px-4 py-6 space-y-2">
+            <a href="/" class="nav-item flex items-center px-4 py-3 text-lg font-medium">
+                <img src="{{url_for('static', filename='overview.png')}}" alt="overview icon" class="w-10 h-10 object-contain mr-5"/> Overview
+            </a>
+            <a href="/sentiment" class="nav-item flex items-center px-4 py-3 text-lg font-medium">
+                <img src="{{url_for('static', filename='sentiment.png')}}" alt="sentiment icon" class="w-10 h-10 object-contain mr-5"/> Sentiment Analysis
+            </a>
+            <a href="/versions" class="nav-item active flex items-center px-4 py-3 text-lg font-medium">
+                <img src="{{url_for('static', filename='version.png')}}" alt="version icon" class="w-10 h-10 object-contain mr-5"/> Version Analytics
+            </a>
+            <a href="/reviews" class="nav-item flex items-center px-4 py-3 text-lg font-medium">
+                <img src="{{url_for('static', filename='review.png')}}" alt="review icon" class="w-12 h-12 object-contain mr-4"/> Review Explorer
+            </a>
+        </nav>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 overflow-y-auto bg-slate-bg relative">
+        <div class="p-8 max-w-7xl mx-auto">
+            
+            <div class="mb-8">
+                <h1 class="text-3xl font-bold text-slate-800">Release Performance</h1>
+                <p class="text-slate-500 mt-1">Evaluate software quality and technical stability</p>
+            </div>
+
+            <!-- CHART: VERSION LEADERBOARD -->
+            <div class="dashboard-card p-6 mb-8">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-lg">🏆 Version Stability Leaderboard</h3>
+                        <p class="text-xs text-gray-500">Comparing average user rating across recent releases</p>
+                    </div>
+                </div>
+                <div class="h-80 w-full">
+                    <canvas id="versionChart"></canvas>
+                </div>
+            </div>
+
+            <!-- TABLE: TECHNICAL DEBT INDEX -->
+            <div class="dashboard-card overflow-hidden">
+                <div class="p-6 border-b border-gray-100 bg-orange-50 flex justify-between items-center">
+                    <div>
+                        <h3 class="font-bold text-orange-900 text-lg">⚠️ Technical Stability Index</h3>
+                        <p class="text-sm text-orange-700 opacity-80">Based on frequency of "Crash", "Lag", "Slow", "Bug"</p>
+                    </div>
+                    <div class="bg-white px-3 py-1 rounded-full border border-orange-200 text-xs font-bold text-orange-600">
+                        Automated Detection
+                    </div>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
+                            <tr>
+                                <th class="px-6 py-3">Version</th>
+                                <th class="px-6 py-3">Issue Rate (%)</th>
+                                <th class="px-6 py-3">Impact (Users)</th>
+                                <th class="px-6 py-3">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="crashTableBody" class="divide-y divide-gray-100 text-sm">
+                            <!-- Injected via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Footer -->
+             <div class="mt-12 text-center text-gray-400 text-sm pb-8">
+                <p>&copy; 2024 GCash Analytics Dashboard.</p>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', fetchVersions);
+
+        async function fetchVersions() {
+            try {
+                const response = await fetch('/api/versions');
+                const data = await response.json();
+
+                if(data.error) {
+                    alert("Error: " + data.error);
+                    return;
+                }
+
+                // --- 1. Render Bar Chart ---
+                const ctx = document.getElementById('versionChart').getContext('2d');
+                
+                // Dynamic Colors: Green for good versions, Red for bad
+                const bgColors = data.rating_chart.data.map(score => 
+                    score >= 4.0 ? '#22c55e' : (score >= 3.0 ? '#f59e0b' : '#ef4444')
+                );
+
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.rating_chart.labels,
+                        datasets: [{
+                            label: 'Average Rating',
+                            data: data.rating_chart.data,
+                            backgroundColor: bgColors,
+                            borderRadius: 6,
+                            barPercentage: 0.6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return `Rating: ${context.raw} ⭐ (${data.rating_chart.counts[context.dataIndex]} reviews)`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                min: 1, max: 5,
+                                grid: { borderDash: [4, 4] }
+                            },
+                            x: { grid: { display: false } }
+                        }
+                    }
+                });
+
+                // --- 2. Render Crash Table ---
+                const tbody = document.getElementById('crashTableBody');
+                tbody.innerHTML = '';
+
+                data.crash_data.forEach(row => {
+                    // Determine Status Badge
+                    let statusHtml = '';
+                    let rowClass = '';
+                    
+                    if (row.percentage >= 15) {
+                        statusHtml = '<span class="bg-red-100 text-red-800 text-xs font-bold px-2 py-1 rounded border border-red-200">CRITICAL</span>';
+                        rowClass = 'bg-red-50/50'; // Highlight row slightly
+                    } else if (row.percentage >= 8) {
+                        statusHtml = '<span class="bg-orange-100 text-orange-800 text-xs font-bold px-2 py-1 rounded border border-orange-200">UNSTABLE</span>';
+                    } else {
+                        statusHtml = '<span class="bg-green-100 text-green-800 text-xs font-bold px-2 py-1 rounded border border-green-200">STABLE</span>';
+                    }
+
+                    const html = `
+                        <tr class="hover:bg-gray-50 transition ${rowClass}">
+                            <td class="px-6 py-4">
+                                <span class="font-bold text-gray-700">v${row.version}</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="flex items-center">
+                                    <div class="w-24 bg-gray-200 rounded-full h-2 mr-3">
+                                        <div class="bg-orange-500 h-2 rounded-full" style="width: ${Math.min(row.percentage, 100)}%"></div>
+                                    </div>
+                                    <span class="font-bold text-gray-700">${row.percentage}%</span>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 text-gray-600">
+                                ${row.count} / ${row.total} reviews
+                            </td>
+                            <td class="px-6 py-4">
+                                ${statusHtml}
+                            </td>
+                        </tr>
+                    `;
+                    tbody.innerHTML += html;
+                });
+
+            } catch (e) {
+                console.error("Error:", e);
+            }
+        }
+    </script>
+</body>
+</html>
